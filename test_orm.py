@@ -2,7 +2,7 @@ import model
 from datetime import date
 
 from sqlalchemy import text
-
+from sqlalchemy.orm.session import Session
 
 def test_orderline_mapper_can_load_lines(session):
     session.execute(
@@ -21,7 +21,7 @@ def test_orderline_mapper_can_load_lines(session):
     assert session.query(model.OrderLine).all() == expected
 
 
-def test_orderline_mapper_can_save_lines(session):
+def test_orderline_mapper_can_save_lines(session: Session):
     new_line = model.OrderLine("order1", "DECORATIVE-WIDGET", 12)
     session.add(new_line)
     session.commit()
@@ -30,7 +30,7 @@ def test_orderline_mapper_can_save_lines(session):
     assert rows == [("order1", "DECORATIVE-WIDGET", 12)]
 
 
-def test_retrieving_batches(session):
+def test_retrieving_batches(session: Session):
     session.execute(
         text(
             "INSERT INTO batches (reference, sku, _purchased_quantity, eta)"
@@ -51,7 +51,7 @@ def test_retrieving_batches(session):
     assert session.query(model.Batch).all() == expected
 
 
-def test_saving_batches(session):
+def test_saving_batches(session: Session):
     batch = model.Batch("batch1", "sku1", 100, eta=None)
     session.add(batch)
     session.commit()
@@ -61,7 +61,7 @@ def test_saving_batches(session):
     assert list(rows) == [("batch1", "sku1", 100, None)]
 
 
-def test_saving_allocations(session):
+def test_saving_allocations(session: Session):
     batch = model.Batch("batch1", "sku1", 100, eta=None)
     line = model.OrderLine("order1", "sku1", 10)
     batch.allocate(line)
@@ -71,7 +71,7 @@ def test_saving_allocations(session):
     assert rows == [(line.id, batch.id)]
 
 
-def test_retrieving_allocations(session):
+def test_retrieving_allocations(session: Session):
     session.execute(
         text('INSERT INTO order_lines (orderid, sku, qty) VALUES ("order1", "sku1", 12)')
     )
