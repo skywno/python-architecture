@@ -1,5 +1,6 @@
 import abc
 import model
+from sqlalchemy.orm.session import Session
 
 
 class AbstractRepository(abc.ABC):
@@ -13,10 +14,10 @@ class AbstractRepository(abc.ABC):
 
 
 class SqlAlchemyRepository(AbstractRepository):
-    def __init__(self, session):
+    def __init__(self, session: Session):
         self.session = session
 
-    def add(self, batch):
+    def add(self, batch: model.Batch):
         self.session.add(batch)
 
     def get(self, reference):
