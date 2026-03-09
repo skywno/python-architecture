@@ -3,7 +3,7 @@ from __future__ import annotations
 import model
 from model import OrderLine
 from repository import AbstractRepository
-
+from datetime import date
 
 class InvalidSku(Exception):
     pass
@@ -30,3 +30,10 @@ def allocate(orderId: str, sku: str, qty: int, repo: AbstractRepository, session
     batchref = model.allocate(model.OrderLine(orderId, sku, qty), batches)
     session.commit()
     return batchref
+
+def add_batch(
+        ref: str, sku: str, qty: int, eta: date | None,
+        repo: AbstractRepository, session,
+):
+    repo.add(model.Batch(ref, sku, qty, eta))
+    session.commit()
