@@ -13,7 +13,7 @@ services:
       - API_HOST=app
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
-      - ./src:/src
+      - ./src:/app/src
       - ./tests:/tests
     ports:
       - "5005:80"
