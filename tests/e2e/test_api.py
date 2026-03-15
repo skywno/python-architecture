@@ -42,3 +42,22 @@ def test_unhappy_path_returns_400_and_error_message():
     r = requests.post(f"{url}/allocate", json=data)
     assert r.status_code == 400
     assert r.json()["message"] == f"Invalid sku {unknown_sku}"
+
+@pytest.mark.usefixtures("postgres_db")
+@pytest.mark.usefixtures("restart_api")
+def test_out_of_stock_fails_with_200_and_None_batchref():
+    sku = random_sku()
+    batch = random_batchref(1)
+    post_to_add_batch(batch, sku, 10, "2011-01-01")
+    data = {"orderid": random_orderid(), "sku": sku, "qty": 9}
+
+    url = config.get_api_url()
+    r = requests.post(f"{url}/allocate", json=data)
+
+    assert r.status_code == 201
+    assert r.json()["batchref"] == batch
+
+    # try to allocate again
+    r = requests.post(f"{url}/allocate", json=data)
+    assert r.status_code == 201
+    assert r.json()["batchref"] == None
