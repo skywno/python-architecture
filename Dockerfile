@@ -1,17 +1,11 @@
 FROM python:3.9-slim-buster
 
-# RUN apt install gcc libpq (no longer needed bc we use psycopg2-binary)
+WORKDIR /app
 
-COPY requirements.txt /tmp/
-RUN pip install -r /tmp/requirements.txt
-
-RUN mkdir -p /app
 COPY pyproject.toml /app/
 COPY src/ /app/src/
-WORKDIR /app
-RUN pip install -e .
-COPY tests/ /tests/
+COPY tests/ /app/tests/
+RUN pip install --no-cache-dir -e ".[dev]"
 
-WORKDIR /app/src
-ENV FLASK_APP=allocation/entrypoints/flask_app.py FLASK_DEBUG=1 PYTHONUNBUFFERED=1
+ENV FLASK_APP=allocation.entrypoints.flask_app:app FLASK_DEBUG=1 PYTHONUNBUFFERED=1
 CMD flask run --host=0.0.0.0 --port=80

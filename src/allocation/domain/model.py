@@ -23,7 +23,6 @@ class OrderLine:
     sku: str
     qty: int
 
-
 class Batch:
     def __init__(self, ref: str, sku: str, qty: int, eta: Optional[date]):
         self.reference = ref
@@ -68,3 +67,20 @@ class Batch:
 
     def can_allocate(self, line: OrderLine) -> bool:
         return self.sku == line.sku and self.available_quantity >= line.qty
+
+
+class Product:
+
+    def __init__(self, sku: str, batches: List[Batch], version_number: int = 0):
+        self.sku = sku
+        self.batches = batches
+        self.version_number = version_number
+
+    def allocate(self, orderline: OrderLine):
+        try:
+            batch = next(b for b in sorted(self.batches) if b.can_allocate(orderline))
+            batch.allocate(orderline)
+            self.version_number += 1
+            return batch.reference
+        except StopIteration:
+            raise OutOfStock(f"Out of stock for sku {orderline.sku}")
