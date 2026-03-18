@@ -10,6 +10,9 @@ dependencies = [
     "sqlalchemy",
     "flask",
     "psycopg2-binary",
+    "tenacity",
+    "requests",
+    "redis",
 ]
 
 [project.optional-dependencies]
@@ -17,7 +20,6 @@ dev = [
     "pytest",
     "pytest-icdiff",
     "mypy",
-    "requests",
 ]
 
 [tool.setuptools.packages.find]
@@ -25,6 +27,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "--tb=short"
+log_cli = true
+log_cli_level = "DEBUG"
 
 [tool.mypy]
 ignore_missing_imports = false

@@ -8,7 +8,10 @@ from requests.exceptions import ConnectionError
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, clear_mappers
-
+import redis
+import shutil
+import subprocess
+from tenacity import retry, stop_after_delay
 from allocation.adapters.orm import metadata, start_mappers
 from allocation import config
 
@@ -52,6 +55,16 @@ def wait_for_webapp_to_come_up():
             time.sleep(0.5)
     pytest.fail("API never came up")
 
+@retry(stop=stop_after_delay(10))
+def wait_for_webapp_to_come_up():
+    return requests.get(config.get_api_url())
+
+
+@retry(stop=stop_after_delay(10))
+def wait_for_redis_to_come_up():
+    r = redis.Redis(**config.get_redis_host_and_port())
+    return r.ping()
+
 
 @pytest.fixture(scope="session")
 def postgres_db():
@@ -75,3 +88,14 @@ def restart_api():
     (Path(__file__).parent / "../src/allocation/entrypoints/flask_app.py").touch()
     time.sleep(0.5)
     wait_for_webapp_to_come_up()
+
+@pytest.fixture
+def restart_redis_pubsub():
+    wait_for_redis_to_come_up()
+    if not shutil.which("docker-compose"):
+        print("skipping restart, assumes running in container")
+        return
+    subprocess.run(
+        ["docker-compose", "restart", "-t", "0", "redis_pubsub"],
+        check=True,
+    )

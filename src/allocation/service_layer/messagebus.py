@@ -1,29 +1,58 @@
 from allocation.domain import events
-from typing import Dict, List, Callable, Type
+from typing import Dict, List, Callable, Type, Union, Optional
 from allocation.adapters import email
 from allocation.service_layer import unit_of_work
+from allocation.domain import commands
+from allocation.service_layer import handler as handlers
+import logging
+from tenacity import Retrying, RetryError, stop_after_attempt, wait_exponential
 
-from allocation.service_layer.handler import (
-    send_out_of_stock_notification,
-    add_batch,
-    allocate,
-    change_batch_quantity,
-)
+logger = logging.getLogger(__name__)
 
-def handle(event: events.Event, uow: unit_of_work.AbstractUnitOfWork):
+Message = Union[events.Event, commands.Command]
+
+
+def handle(message: Message, uow: unit_of_work.AbstractUnitOfWork):
     results = []
-    queue = [event]
+    queue = [message]
     while queue:
-        event = queue.pop(0)
-        for handler in HANDLERS[type(event)]:
-            result = handler(event, uow)
-            results.append(result)
-            queue.extend(uow.collect_new_events())
+        message = queue.pop(0)
+        if isinstance(message, events.Event):
+            handle_event(message, queue, uow)
+        elif isinstance(message, commands.Command):
+            cmd_result = handle_command(message, queue, uow)
+            results.append(cmd_result)
     return results
 
+def handle_event(event: events.Event, queue: List[Message], uow: unit_of_work.AbstractUnitOfWork):
+    for handler in HANDLERS[type(event)]:
+        try:
+            logger.debug("Handling event: %s with the handler: %s", event, handler)
+            handler(event, uow)
+            queue.extend(uow.collect_new_events())
+        except Exception as e:
+            logger.error("Exception handling event: %s with the handler: %s", event, handler, exc_info=True)
+            continue
+
+def handle_command(command: commands.Command, queue: List[Message], uow: unit_of_work.AbstractUnitOfWork):
+    logger.debug('handling command: %s', command)
+    try:
+        handler = COMMAND_HANDLERS[type(command)]
+        result = handler(command, uow)
+        queue.extend(uow.collect_new_events())
+        return result
+    except Exception as e:
+        logger.error("Exception handling command: %s with the handler: %s", command, handler)
+        logger.exception(e)
+        raise
+
 HANDLERS : Dict[Type[events.Event], List[Callable[[events.Event], None]]] = {
-    events.OutOfStock: [send_out_of_stock_notification],
-    events.BatchCreated: [add_batch],
-    events.AllocationRequired: [allocate],
-    events.BatchQuantityChanged: [change_batch_quantity],
+    events.OutOfStock: [handlers.send_out_of_stock_notification],
+    events.Allocated: [handlers.publish_allocated_event],
+}
+
+COMMAND_HANDLERS: Dict[Type[commands.Command], Callable[[commands.Command], Optional[str]]] = {
+    commands.Allocate: handlers.allocate,
+    commands.CreateBatch: handlers.add_batch,
+    commands.ChangeBatchQuantity: handlers.change_batch_quantity,
 }

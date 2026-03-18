@@ -3,7 +3,7 @@ from flask import Flask, request
 
 from allocation.adapters import orm
 from allocation.service_layer import unit_of_work, messagebus, handler
-from allocation.domain import events
+from allocation.domain import commands
 
 app = Flask(__name__)
 orm.start_mappers()
@@ -14,13 +14,13 @@ def add_batch():
     eta = request.json["eta"]
     if eta is not None:
         eta = datetime.fromisoformat(eta).date()
-    event = events.BatchCreated(
+    cmd = commands.CreateBatch(
         ref=request.json["ref"],
         sku=request.json["sku"],
         qty=request.json["qty"],
         eta=eta,
     )
-    results = messagebus.handle(event, unit_of_work.SqlAlchemyUnitOfWork())
+    results = messagebus.handle(cmd, unit_of_work.SqlAlchemyUnitOfWork())
     batchref = results[0]
     return {"batchref": batchref}, 201
 
@@ -28,12 +28,12 @@ def add_batch():
 @app.route("/allocate", methods=["POST"])
 def allocate_endpoint():
     try:
-        event = events.AllocationRequired(
+        cmd = commands.Allocate(
             orderid=request.json["orderid"],
             sku=request.json["sku"],
             qty=request.json["qty"],
         )
-        results = messagebus.handle(event, unit_of_work.SqlAlchemyUnitOfWork())
+        results = messagebus.handle(cmd, unit_of_work.SqlAlchemyUnitOfWork())
         batchref = results[0]
     except handler.InvalidSku as e:
         return {"message": str(e)}, 400
@@ -42,12 +42,12 @@ def allocate_endpoint():
 
 @app.route("/change_batch_quantity", methods=["POST"])
 def change_batch_quantity():
-    event = events.BatchQuantityChanged(
+    cmd = commands.ChangeBatchQuantity(
         ref=request.json["ref"],
         qty=request.json["qty"],
     )
     try:
-        results = messagebus.handle(event, unit_of_work.SqlAlchemyUnitOfWork())
+        results = messagebus.handle(cmd, unit_of_work.SqlAlchemyUnitOfWork())
         return {"message": "Batch quantity changed"}, 201
     except handler.InvalidBatchReference as e:
         return {"message": str(e)}, 400
