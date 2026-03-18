@@ -5,6 +5,7 @@ from allocation.service_layer import messagebus, unit_of_work
 from allocation.domain import model, events
 from allocation.service_layer import handler
 
+from datetime import date
 
 class FakeProductRepository(repository.AbstractProductRepository):
     def __init__(self, products):
@@ -16,6 +17,13 @@ class FakeProductRepository(repository.AbstractProductRepository):
 
     def _get(self, sku):
         return next((p for p in self._products if p.sku == sku), None)
+    
+    def _get_by_batchref(self, batchref):
+        return next((
+            p for p in self._products for b in p.batches
+            if b.reference == batchref
+        ), None)
+
 
 class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
     def __init__(self):
@@ -90,3 +98,34 @@ class TestSendEmailOnOutOfStockError:
                 "stock@made.com", 
                 "Out of stock for POPULAR-CHURTAIN"
             )
+
+class TestChangeBatchQuantity:
+    def test_changes_available_quantity(self):
+        uow = FakeUnitOfWork()
+        event = events.BatchCreated(ref="b1", sku="OMINOUS-MIRROR", qty=100, eta=None)
+        messagebus.handle(event, uow)
+        [batch] = uow.products.get(sku="OMINOUS-MIRROR").batches
+        assert batch.available_quantity == 100
+
+        event = events.BatchQuantityChanged(ref="b1", qty=90)
+        messagebus.handle(event, uow)
+        assert batch.available_quantity == 90
+    
+    def test_reallocates_if_necessary(self):
+        uow = FakeUnitOfWork()
+        event_history = [
+            events.BatchCreated(ref="b1", sku="OMINOUS-MIRROR", qty=100, eta=None),
+            events.BatchCreated(ref="b2", sku="OMINOUS-MIRROR", qty=100, eta=date.today()),
+            events.AllocationRequired(orderid="o1", sku="OMINOUS-MIRROR", qty=40),
+            events.AllocationRequired(orderid="o2", sku="OMINOUS-MIRROR", qty=40)
+        ]
+        for e in event_history:
+            messagebus.handle(e, uow)
+        [batch1, batch2] = uow.products.get(sku="OMINOUS-MIRROR").batches
+        assert batch1.available_quantity == 20
+        assert batch2.available_quantity == 100
+        
+        event = events.BatchQuantityChanged(ref="b1", qty=50)
+        messagebus.handle(event, uow)
+        assert batch1.available_quantity == 10
+        assert batch2.available_quantity == 60

@@ -39,3 +39,15 @@ def allocate_endpoint():
         return {"message": str(e)}, 400
 
     return {"batchref": batchref}, 201
+
+@app.route("/change_batch_quantity", methods=["POST"])
+def change_batch_quantity():
+    event = events.BatchQuantityChanged(
+        ref=request.json["ref"],
+        qty=request.json["qty"],
+    )
+    try:
+        results = messagebus.handle(event, unit_of_work.SqlAlchemyUnitOfWork())
+        return {"message": "Batch quantity changed"}, 201
+    except handler.InvalidBatchReference as e:
+        return {"message": str(e)}, 400

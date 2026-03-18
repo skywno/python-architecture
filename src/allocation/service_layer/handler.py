@@ -14,6 +14,9 @@ from typing import Dict, List, Callable, Type
 class InvalidSku(Exception):
     pass
 
+class InvalidBatchReference(Exception):
+    pass
+
 def is_valid_sku(sku, batches):
     return sku in {b.sku for b in batches}
 
@@ -47,3 +50,14 @@ def allocate(
         batchref = product.allocate(line)
         uow.commit()
     return batchref
+
+def change_batch_quantity(
+    event: events.BatchQuantityChanged, 
+    uow: unit_of_work.AbstractUnitOfWork
+) -> None:
+    with uow:
+        product = uow.products.get_by_batchref(batchref=event.ref)
+        if product is None:
+            raise InvalidBatchReference(f"Invalid batch reference {event.ref}")
+        product.change_batch_quantity(event.ref, event.qty)
+        uow.commit()

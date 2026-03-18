@@ -7,6 +7,7 @@ from allocation.service_layer.handler import (
     send_out_of_stock_notification,
     add_batch,
     allocate,
+    change_batch_quantity,
 )
 
 def handle(event: events.Event, uow: unit_of_work.AbstractUnitOfWork):
@@ -24,4 +25,5 @@ HANDLERS : Dict[Type[events.Event], List[Callable[[events.Event], None]]] = {
     events.OutOfStock: [send_out_of_stock_notification],
     events.BatchCreated: [add_batch],
     events.AllocationRequired: [allocate],
+    events.BatchQuantityChanged: [change_batch_quantity],
 }

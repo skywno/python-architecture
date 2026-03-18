@@ -61,3 +61,16 @@ def test_out_of_stock_fails_with_200_and_None_batchref():
     r = requests.post(f"{url}/allocate", json=data)
     assert r.status_code == 201
     assert r.json()["batchref"] == None
+
+@pytest.mark.usefixtures("postgres_db")
+@pytest.mark.usefixtures("restart_api")
+def test_change_batch_quantity_returns_201_and_allocated_batch():
+    sku = random_sku()
+    batch = random_batchref(1)
+    post_to_add_batch(batch, sku, 50, "2011-01-01")
+
+    url = config.get_api_url()
+    r = requests.post(f"{url}/change_batch_quantity", json={"ref": batch, "qty": 40})
+    
+    assert r.status_code == 201
+    assert r.json()["message"] == "Batch quantity changed"
