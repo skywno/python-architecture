@@ -99,3 +99,9 @@ def restart_redis_pubsub():
         ["docker-compose", "restart", "-t", "0", "redis_pubsub"],
         check=True,
     )
+
+@pytest.fixture
+def sqlite_session_factory(in_memory_db):
+    start_mappers()
+    yield sessionmaker(bind=in_memory_db)
+    clear_mappers()

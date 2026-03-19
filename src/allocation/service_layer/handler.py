@@ -11,6 +11,8 @@ from allocation.domain import events, commands
 from allocation.adapters import email
 from typing import Dict, List, Callable, Type
 from tenacity import retry, stop_after_attempt, wait_exponential
+from sqlalchemy import text
+from dataclasses import asdict
 
 class InvalidSku(Exception):
     pass
@@ -35,16 +37,23 @@ def add_batch(cmd: commands.CreateBatch, uow: unit_of_work.AbstractUnitOfWork):
 def allocate(
     cmd: commands.Allocate,
     uow: unit_of_work.AbstractUnitOfWork,
-) -> str | None:
+) -> None:
     line = OrderLine(cmd.orderid, cmd.sku, cmd.qty)
     with uow:
         product = uow.products.get(sku=cmd.sku)
         if product is None:
             raise InvalidSku(f"Invalid sku {cmd.sku}")
-        batchref = product.allocate(line)
+        product.allocate(line)
         uow.commit()
-    return batchref
 
+def reallocate(
+    event: events.Deallocated,
+    uow: unit_of_work.AbstractUnitOfWork,
+):
+    with uow:
+        product = uow.products.get(sku=event.sku)
+        product.events.append(commands.Allocate(**asdict(event)))
+        uow.commit()
 
 def change_batch_quantity(
     cmd: commands.ChangeBatchQuantity, 
@@ -76,3 +85,25 @@ def send_out_of_stock_notification(event: events.OutOfStock, uow: unit_of_work.A
 )
 def publish_allocated_event(event: events.Allocated, uow: unit_of_work.AbstractUnitOfWork):
     redis_eventpublisher.publish('line_allocated', event)
+
+def add_allocation_to_read_model(
+    event: events.Allocated,
+    uow: unit_of_work.SqlAlchemyUnitOfWork,
+):
+    with uow:
+        uow.session.execute(
+            text("INSERT INTO allocations_view (orderid, sku, batchref) VALUES (:orderid, :sku, :batchref)"),
+            dict(orderid=event.orderid, sku=event.sku, batchref=event.batchref),
+        )
+        uow.commit()
+
+def remove_allocation_from_read_model(
+    event: events.Deallocated,
+    uow: unit_of_work.SqlAlchemyUnitOfWork,
+):
+    with uow:
+        uow.session.execute(
+            text("DELETE FROM allocations_view WHERE orderid = :orderid AND sku = :sku"),
+            dict(orderid=event.orderid, sku=event.sku),
+        )
+        uow.commit()

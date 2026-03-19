@@ -13,16 +13,13 @@ Message = Union[events.Event, commands.Command]
 
 
 def handle(message: Message, uow: unit_of_work.AbstractUnitOfWork):
-    results = []
     queue = [message]
     while queue:
         message = queue.pop(0)
         if isinstance(message, events.Event):
             handle_event(message, queue, uow)
         elif isinstance(message, commands.Command):
-            cmd_result = handle_command(message, queue, uow)
-            results.append(cmd_result)
-    return results
+            handle_command(message, queue, uow)
 
 def handle_event(event: events.Event, queue: List[Message], uow: unit_of_work.AbstractUnitOfWork):
     for handler in HANDLERS[type(event)]:
@@ -48,10 +45,17 @@ def handle_command(command: commands.Command, queue: List[Message], uow: unit_of
 
 HANDLERS : Dict[Type[events.Event], List[Callable[[events.Event], None]]] = {
     events.OutOfStock: [handlers.send_out_of_stock_notification],
-    events.Allocated: [handlers.publish_allocated_event],
+    events.Allocated: [
+        handlers.publish_allocated_event,
+        handlers.add_allocation_to_read_model,
+    ],
+    events.Deallocated: [
+        handlers.remove_allocation_from_read_model,
+        handlers.reallocate,
+    ]
 }
 
-COMMAND_HANDLERS: Dict[Type[commands.Command], Callable[[commands.Command], Optional[str]]] = {
+COMMAND_HANDLERS: Dict[Type[commands.Command], Callable[[commands.Command], None]] = {
     commands.Allocate: handlers.allocate,
     commands.CreateBatch: handlers.add_batch,
     commands.ChangeBatchQuantity: handlers.change_batch_quantity,
